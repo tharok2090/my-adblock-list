@@ -1,0 +1,44 @@
+name: Build Blocklist
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # cada día a las 03:00 UTC
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Download and combine lists
+        run: |
+          rm -f combined.txt
+          touch combined.txt
+
+          # Leer lists.txt ignorando comentarios y líneas vacías
+          grep -vE '^\s*#|^\s*$' lists.txt | while read -r url; do
+            echo "Downloading $url"
+            curl -fsSL "$url" >> combined.txt || echo "Failed: $url"
+            echo "" >> combined.txt
+          done
+
+          # Eliminar comentarios y líneas vacías del resultado final
+          grep -vE '^\s*#|^\s*$' combined.txt > tmp.txt
+          mv tmp.txt combined.txt
+
+          # Eliminar espacios al inicio/final
+          sed -i 's/^[ \t]*//;s/[ \t]*$//' combined.txt
+
+          # Eliminar duplicados
+          sort -u combined.txt -o combined.txt
+
+      - name: Commit updated list
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add combined.txt
+          git commit -m "Update combined list" || echo "No changes"
+          git push
