@@ -21,22 +21,29 @@ jobs:
           rm -f combined.txt
           touch combined.txt
 
-          # Leer lists.txt ignorando comentarios y líneas vacías
+          # Descargar URLs válidas ignorando comentarios y líneas vacías
           grep -vE '^\s*#|^\s*$' lists.txt | while read -r url; do
             echo "Downloading $url"
-            curl -fsSL "$url" >> combined.txt || echo "Failed: $url"
-            echo "" >> combined.txt
+            curl -fsSL "$url" >> raw.txt || echo "Failed: $url"
+            echo "" >> raw.txt
           done
 
-          # Eliminar comentarios y líneas vacías del resultado final
-          grep -vE '^\s*#|^\s*$' combined.txt > tmp.txt
-          mv tmp.txt combined.txt
+          # Procesado limpio:
+          cat raw.txt \
+            | sed 's/#.*//' \
+            | sed 's/!.*//' \
+            | sed 's/^[ \t]*//;s/[ \t]*$//' \
+            | grep -vE '^\s*$' \
+            | awk '
+                # Convertir formato hosts (0.0.0.0 dominio.com)
+                $1 ~ /^(0\.0\.0\.0|127\.0\.0\.1)$/ { print $2; next }
+                # Si ya es solo dominio
+                { print $1 }
+              ' \
+            | sort -u \
+            > combined.txt
 
-          # Eliminar espacios al inicio/final
-          sed -i 's/^[ \t]*//;s/[ \t]*$//' combined.txt
-
-          # Eliminar duplicados
-          sort -u combined.txt -o combined.txt
+          rm -f raw.txt
 
       - name: Commit updated list
         run: |
